@@ -86,7 +86,7 @@ object EdnIo {
   def prettyPrint(writer: Writer, edn: Edn): Unit =
     pprint.invoke(EdnToObjectTranslation.translate(edn), writer)
 
-  def prettyPrint(edn: Edn): Unit = println(prettyString(edn).trim)
+  def prettyPrint(edn: Edn): Unit = println(prettyString(edn))
 
   def prettyString(edn: Edn): String = {
     val sw = new StringWriter()
@@ -97,7 +97,7 @@ object EdnIo {
   def compactString(edn: Edn): String = {
     val sw = new StringWriter()
     write(sw, edn)
-    sw.toString
+    sw.toString.trim
   }
 
   private def toStream(ednReader: EdnReader): Stream[Edn] =
