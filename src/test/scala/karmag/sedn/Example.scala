@@ -76,5 +76,38 @@ class Example extends FunSuite {
 
     // Transform all keywords to strings.
     edn.transform({ case EKeyword(kw) => EString(kw) })
+
+    // Remove all tags from data.
+    edn.transform { case ETag(_, value) => value }
+
+    // Both inspection and traversal at the same time.
+    edn.walk[Int](
+      state = 0,
+      pre = { case (ETag(_, value), n) => (value, n + 1) })
+
+    //--------------------------------------------------------------------------
+    // Schema
+
+    import karmag.sedn.EdnSchemas._
+
+    // Schema checks return ENil on success and an edn datastructure describing
+    // the error on failure.
+
+    // Each type has a corresponding schema.
+    eNil.check(ENil)
+    eInt.check(EInt(12))
+    eMap.check(EMap(Map()))
+    //...
+
+    // Map validation that requires :name and :age. Validates :color if present
+    // and allow any number of additional key values as long as keys are keywords.
+    map(
+      req("name".kw)  -> and(eString, not(empty)),
+      req("age".kw)   -> and(eInt, pred[Int](n => 0 <= n && n <= 100).errorMessage("0 <= x <= 100")),
+      opt("color".kw) -> enum("red", "green", "blue")
+    ).allowMore(eKeyword, any)
+
+    vector(eInt, eString) // Accepts [10, "hello"]
+    vectorOf(eInt) // Accepts [10, 5, 20, ...]
   }
 }
