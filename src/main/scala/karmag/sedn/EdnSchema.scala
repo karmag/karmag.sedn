@@ -73,6 +73,10 @@ object EdnSchemas {
     * available on the returned schema. */
   def map(kvs: (MapKey, Schema)*): MapSchema = new MapSchema(kvs.toMap)
 
+  /** Map schema that matches based on the given key and value schemas. */
+  def mapOf(keySchema: Schema, valueSchema: Schema): Schema =
+    new MapSchema(Map()).allowMore(keySchema, valueSchema)
+
   sealed trait MapKey
   case class RequiredKey(edn: Edn) extends MapKey
   case class OptionalKey(edn: Edn) extends MapKey

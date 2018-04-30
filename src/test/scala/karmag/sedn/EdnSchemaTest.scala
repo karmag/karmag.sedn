@@ -179,6 +179,20 @@ class EdnSchemaTest extends FunSpec {
     }
   }
 
+  describe("mapOf") {
+    val schema = mapOf(eInt, eKeyword)
+
+    it("ok") {
+      assert(schema.check(TestUtil.read("""{1 :a, 2 :b}""")) === Pass)
+      assert(schema.check(TestUtil.read("""{}""")) === Pass)
+    }
+
+    it("failure") {
+      assert(isFailure(schema.check(TestUtil.read("""{1 :a, 2 "tre"}"""))))
+      assert(isFailure(schema.check(TestUtil.read("""#{}"""))))
+    }
+  }
+
   describe("pred") {
     import EdnConvert.Implicits._
 
