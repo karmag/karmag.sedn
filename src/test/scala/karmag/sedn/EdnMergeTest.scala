@@ -49,4 +49,15 @@ class EdnMergeTest extends FunSpec {
       }
     }
   }
+
+  describe("merge multiple") {
+    import EdnMerge.Implicits._
+
+    val a = TestUtil.read("""{:a 1, :b {:q #{1}}}""")
+    val b = TestUtil.read("""{:a 2, :b {:q {1 nil}}}""")
+    val c = TestUtil.read("""{:a 3, :b {:q {10 true}}}""")
+    val result = a.merge(b, c)
+
+    assert(result === TestUtil.read("""{:a 3, :b {:q #{10}}}"""))
+  }
 }

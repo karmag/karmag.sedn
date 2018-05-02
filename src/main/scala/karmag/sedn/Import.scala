@@ -3,6 +3,7 @@ package karmag.sedn
 import karmag.sedn.Edn.Edn
 import karmag.sedn.EdnConvert.{Base, Converters}
 import karmag.sedn.EdnIo.EdnIoMethods
+import karmag.sedn.EdnMerge.MergeMethods
 import karmag.sedn.EdnTraverse.EdnTraverseMethods
 
 object Import {
@@ -12,7 +13,8 @@ object Import {
       with Converters
       with EdnPath.PathOnEdn
       with EdnIoMethods
-      with EdnTraverseMethods {
+      with EdnTraverseMethods
+      with MergeMethods {
     def path(keys: Edn*): EdnPath.EdnPath = EdnPath.path(keys:_*)
   }
 }

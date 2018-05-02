@@ -4,6 +4,17 @@ import karmag.sedn.Edn._
 
 object EdnMerge {
 
+  object Implicits extends MergeMethods
+
+  trait MergeMethods {
+    implicit class RichEdnMerge(edn: Edn) {
+      def merge(other: Edn, more: Edn*): Edn =
+        more.foldLeft(EdnMerge.merge(edn, other)) {
+          case (data, patch) => EdnMerge.merge(data, patch)
+        }
+    }
+  }
+
   /** data patch   -> action
     * map? map?    -> merge, nil values are removed
     * set? set?    -> union
