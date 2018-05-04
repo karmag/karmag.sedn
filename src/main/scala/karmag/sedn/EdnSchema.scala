@@ -40,6 +40,9 @@ object EdnSchemas {
   /** Matches any value. */
   def any: Schema = AnySchema
 
+  /** Schema that always fails to match. */
+  def none: Schema = NoneSchema
+
   /** Matches the exact value given. */
   def is(edn: Edn): Schema = IsSchema(edn)
 
@@ -107,8 +110,8 @@ object EdnSchemas {
   /** Inverses the given schema. */
   def not(schema: Schema): Schema = NotSchema(schema)
 
-  class MapSchema(kvs: Map[MapKey, Schema],
-                  more: Option[(Schema, Schema)] = None) extends Schema {
+  class MapSchema(private val kvs: Map[MapKey, Schema],
+                  private val more: Option[(Schema, Schema)] = None) extends Schema {
     private val requiredKvs = kvs.collect { case (RequiredKey(k), s) => k -> s }
     private val optionalKvs = kvs.collect { case (OptionalKey(k), s) => k -> s }
     private val definedKeys = requiredKvs.keySet ++ optionalKvs.keySet
@@ -176,6 +179,19 @@ object EdnSchemas {
 
     /** Allow more key values to exist in the map that match the given schemas. */
     def allowMore(key: Schema, value: Schema): MapSchema = new MapSchema(kvs, Option(key -> value))
+
+    /** Merges the given map schema with this map schema. Keys are merged giving
+      * priority to `other`. Additional configuration is picked from `other` first
+      * and this schema otherwise. */
+    def merge(other: MapSchema): MapSchema =
+      new MapSchema(
+        kvs ++ other.kvs,
+        (more, other.more) match {
+          case (None, Some(x)) => Some(x)
+          case (Some(x), None) => Some(x)
+          case _ => other.more
+        }
+      )
   }
 
   class PredicateSchema[T](f: T => Boolean,
@@ -292,6 +308,10 @@ object EdnSchemas {
 
   private case object AnySchema extends Schema {
     override def check(data: Edn): Edn = ENil
+  }
+
+  private case object NoneSchema extends Schema {
+    override def check(data: Edn): Edn = s"None"
   }
 
   private case class AndSchema(schemas: List[Schema]) extends Schema {

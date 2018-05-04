@@ -10,6 +10,11 @@ class EdnSchemaTest extends FunSpec {
 
   private def isFailure(edn: Edn): Boolean = edn != Pass
 
+  private def stuff: List[Edn] = List(
+    "nil", "true", "\"text\"", "\\g", "101", "1.5",
+    "1/7", "symbol", ":keyword", "(1 2 3)", "[1 2 3]",
+    "{:a 1}", "#{1 2 3}", "#tag 1").map(TestUtil.read)
+
   describe("edn type schemas") {
     val pairs = List(
       (eNil,     "nil"),
@@ -39,6 +44,22 @@ class EdnSchemaTest extends FunSpec {
             assert(isFailure(schema.check(nonMatchingValue)))
           }
         }
+      }
+    }
+  }
+
+  describe("any") {
+    stuff.foreach { edn =>
+      it(EdnIo.compactString(edn)) {
+        assert(any.check(edn) === Pass)
+      }
+    }
+  }
+
+  describe("none") {
+    stuff.foreach { edn =>
+      it(EdnIo.compactString(edn)) {
+        assert(isFailure(none.check(edn)))
       }
     }
   }
@@ -175,6 +196,38 @@ class EdnSchemaTest extends FunSpec {
       it("validation failure") {
         assert(isFailure(schema2.check(TestUtil.read("""{:req true, "key" "yes"}"""))))
         assert(isFailure(schema2.check(TestUtil.read("""{:req true, :more 10}"""))))
+      }
+    }
+
+    describe("merge") {
+
+      describe("keys") {
+        val schema =
+          map(req("alpha".kw) -> eString, req("omega".kw) -> eString)
+            .merge(map(req("beta".kw) -> eInt, req("omega".kw) -> eInt))
+
+        it("ok") {
+          assert(schema.check(TestUtil.read("""{:alpha "s", :beta 1, :omega 2}""")) === Pass)
+        }
+
+        it("failure") {
+          assert(isFailure(schema.check(TestUtil.read("""{:alpha "s", :beta 1, :omega "text"}"""))))
+        }
+      }
+
+      describe("more") {
+        val schema1 = map().allowMore(eKeyword, eInt)
+        val schema2 = map().allowMore(eString, eBool)
+
+        it("ok") {
+          assert(schema1.merge(schema2).check(TestUtil.read("""{"s" true}""")) == Pass)
+          assert(schema2.merge(schema1).check(TestUtil.read("""{:k 1}""")) == Pass)
+        }
+
+        it("failure") {
+          assert(isFailure(schema1.merge(schema2).check(TestUtil.read("""{:k 1}"""))))
+          assert(isFailure(schema2.merge(schema1).check(TestUtil.read("""{"s" true}"""))))
+        }
       }
     }
   }
