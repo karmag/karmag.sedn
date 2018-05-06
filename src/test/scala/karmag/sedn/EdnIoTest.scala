@@ -71,12 +71,13 @@ class EdnIoTest extends FunSuite {
   }
 
   test("write") {
-    val text = """[1 "two" (:three four) {:a 1} #{true}]"""
+    val text = """[1 "two" (:three four) {:a 1} #{true} #tag value]"""
     val edn = read(text)
     val sw = new StringWriter()
     EdnIo.write(sw, edn)
 
-    assert(text == sw.toString)
+    assert(text === sw.toString)
+    assert(text === EdnIo.compactString(edn))
   }
 
   test("pprint") {

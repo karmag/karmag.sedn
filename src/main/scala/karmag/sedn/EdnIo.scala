@@ -73,14 +73,67 @@ object EdnIo {
   def read(string: String): EdnReader = read(new StringReader(string))
 
   def write(writer: Writer, edn: Edn): Unit = {
-    val obj = EdnToObjectTranslation.translate(edn)
-
     push.invoke(clojure.lang.PersistentHashMap.create(out, writer))
     try {
-      pr.invoke(obj)
+      write(writer, pr.invoke(_), edn)
+      writer.flush()
     } finally {
       pop.invoke()
     }
+  }
+
+  private def write(writer: Writer, pr: Any => Unit, edn: Edn): Unit = {
+    edn match {
+      case ENil | EBool(_) | EString(_) | EChar(_) | EInt(_) | EDecimal(_) | ERatio(_, _) | ESymbol(_) | EKeyword(_) =>
+        pr(EdnToObjectTranslation.translate(edn))
+      case EList(list) =>
+        writeCollection(writer, pr, list, "(", ")")
+      case EVector(vector) =>
+        writeCollection(writer, pr, vector, "[", "]")
+      case EMap(map) =>
+        var first = true
+        writer.write("{")
+        map.foreach { case (key, value) =>
+          if (first) {
+            first = false
+            write(writer, pr, key)
+            writer.write(" ")
+            write(writer, pr, value)
+          } else {
+            writer.write(", ")
+            write(writer, pr, key)
+            writer.write(" ")
+            write(writer, pr, value)
+          }
+        }
+        writer.write("}")
+      case ESet(set) =>
+        writeCollection(writer, pr, set, "#{", "}")
+      case ETag(tag, value) =>
+        writer.write("#")
+        write(writer, pr, tag)
+        writer.write(" ")
+        write(writer, pr, value)
+    }
+  }
+
+  private def writeCollection(writer: Writer,
+                              pr: Any => Unit,
+                              items: Iterable[Edn],
+                              start: String,
+                              stop: String): Unit = {
+    var first = true
+    writer.write(start)
+    items.foreach { item =>
+      if (first) {
+        first = false
+        write(writer, pr, item)
+      } else {
+        writer.write(" ")
+        write(writer, pr, item)
+      }
+    }
+    writer.write(stop)
   }
 
   def prettyPrint(writer: Writer, edn: Edn): Unit =
