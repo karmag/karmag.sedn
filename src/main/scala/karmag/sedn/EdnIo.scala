@@ -23,8 +23,10 @@ object EdnIo {
     }
 
     implicit class RichEdnIo(edn: Edn) {
-      def prettyPrint(): Unit = EdnIo.prettyPrint(edn)
-      def prettyString(): String = EdnIo.prettyString(edn)
+      def prettyPrint(width: Int = 80, indent: String = "  "): Unit =
+        EdnIo.prettyPrint(edn, width, indent)
+      def prettyString(width: Int = 80, indent: String = "  "): String =
+        EdnIo.prettyString(edn, width, indent)
       def compactPrint(): Unit = println(EdnIo.compactString(edn))
       def compactString(): String = {
         val writer = new StringWriter
@@ -38,11 +40,6 @@ object EdnIo {
   private lazy val pop = Clojure.`var`("clojure.core", "pop-thread-bindings")
   private lazy val out = Clojure.`var`("clojure.core", "*out*")
   private lazy val pr = Clojure.`var`("clojure.core", "pr")
-  private lazy val pprint = {
-    val require = Clojure.`var`("clojure.core", "require")
-    require.invoke(clojure.lang.Symbol.intern("clojure.pprint"))
-    Clojure.`var`("clojure.pprint", "pprint")
-  }
 
   def read(source: Source): EdnReader = read(from(source))
 
@@ -76,7 +73,6 @@ object EdnIo {
     push.invoke(clojure.lang.PersistentHashMap.create(out, writer))
     try {
       write(writer, pr.invoke(_), edn)
-      writer.flush()
     } finally {
       pop.invoke()
     }
@@ -136,14 +132,18 @@ object EdnIo {
     writer.write(stop)
   }
 
-  def prettyPrint(writer: Writer, edn: Edn): Unit =
-    pprint.invoke(EdnToObjectTranslation.translate(edn), writer)
+  /** Writes EDN data using indents and line break for readability. width is a
+    * hint for when to use line breaks but is not a hard limit. indent is the
+    * string used for indenting the data. */
+  def writePretty(writer: Writer, edn: Edn, width: Int = 80, indent: String = "  "): Unit =
+    Pretty.write(writer, edn, Pretty.Config(width = width, indentString = indent))
 
-  def prettyPrint(edn: Edn): Unit = println(prettyString(edn))
+  def prettyPrint(edn: Edn, width: Int = 80, indent: String = "  "): Unit =
+    println(prettyString(edn, width, indent))
 
-  def prettyString(edn: Edn): String = {
+  def prettyString(edn: Edn, width: Int = 80, indent: String = "  "): String = {
     val sw = new StringWriter()
-    prettyPrint(sw, edn)
+    writePretty(sw, edn, width, indent)
     sw.toString.trim
   }
 
@@ -152,6 +152,8 @@ object EdnIo {
     write(sw, edn)
     sw.toString.trim
   }
+
+  def compactPrint(edn: Edn): Unit = println(compactString(edn))
 
   private def toStream(ednReader: EdnReader): Stream[Edn] =
     ednReader() match {
@@ -165,18 +167,18 @@ object EdnIo {
   private def from(source: Source): PushbackReader =
     from(
       new StringReader(source.mkString)
-//      new Reader {
-//        override def read(cbuf: Array[Char], off: Int, len: Int): Int = {
-//          var counter = 0
-//          while (counter < len && source.hasNext) {
-//            cbuf(off + counter) = source.next()
-//            counter += 1
-//          }
-//          counter
-//        }
-//
-//        override def close(): Unit = source.close()
-//      }
+      //      new Reader {
+      //        override def read(cbuf: Array[Char], off: Int, len: Int): Int = {
+      //          var counter = 0
+      //          while (counter < len && source.hasNext) {
+      //            cbuf(off + counter) = source.next()
+      //            counter += 1
+      //          }
+      //          counter
+      //        }
+      //
+      //        override def close(): Unit = source.close()
+      //      }
     )
 
   private def from(reader: Reader): PushbackReader =
@@ -340,5 +342,144 @@ private object ObjectToEdnTranslation {
     }
 
     ESet(data)
+  }
+}
+
+private object Pretty {
+
+  case class Config(width: Int = 80,
+                    indentLevel: Int = 0,
+                    indentString: String = "  ") {
+    def inc: Config = copy(indentLevel = indentLevel + 1)
+  }
+
+  def write(writer: Writer, edn: Edn, config: Config = Config()): Unit =
+    if (estimateSize(edn) > config.width)
+      writePrettyItem(writer, edn, config)
+    else {
+      writeIndent(writer, config)
+      EdnIo.write(writer, edn)
+      writer.write("\n")
+    }
+
+  private def writePrettyItem(writer: Writer,
+                              edn: Edn,
+                              config: Config,
+                              leadIndent: Boolean = true): Unit = {
+    edn match {
+      case ENil | EBool(_) | EString(_) | EChar(_) | EInt(_) | EDecimal(_) | ERatio(_, _) | ESymbol(_) | EKeyword(_) =>
+        if (leadIndent)
+          writeIndent(writer, config)
+        EdnIo.write(writer, edn)
+        writer.write("\n")
+      case EList(list) =>
+        writePrettyCollection(writer, list, config, "(", ")", leadIndent)
+      case EVector(vector) =>
+        writePrettyCollection(writer, vector, config, "[", "]", leadIndent)
+      case EMap(map) =>
+        writePrettyMap(writer, map, config, leadIndent)
+      case ESet(set) =>
+        writePrettyCollection(writer, set, config, "#{", "}", leadIndent)
+      case ETag(tag, value) =>
+        if (leadIndent)
+          writeIndent(writer, config)
+        writer.write("#")
+        EdnIo.write(writer, tag)
+        writer.write(" ")
+        writePrettyItem(writer, value, config.inc, leadIndent = false)
+    }
+  }
+
+  private def writePrettyCollection(writer: Writer,
+                                    items: Iterable[Edn],
+                                    config: Config,
+                                    start: String,
+                                    stop: String,
+                                    leadIndent: Boolean = true): Unit = {
+    if (leadIndent)
+      writeIndent(writer, config)
+    writer.write(start)
+    if (items.isEmpty) {
+      writer.write(stop)
+      writer.write("\n")
+    } else {
+      val incConfig = config.inc
+      writer.write("\n")
+      items.foreach { item =>
+        write(writer, item, incConfig)
+      }
+      writeIndent(writer, config)
+      writer.write(stop)
+      writer.write("\n")
+    }
+  }
+
+  private def writePrettyMap(writer: Writer,
+                             map: Map[Edn, Edn],
+                             config: Config,
+                             leadIndent: Boolean = true): Unit = {
+    if (leadIndent)
+      writeIndent(writer, config)
+    writer.write("{")
+    if (map.isEmpty) {
+      writer.write("}")
+      writer.write("\n")
+    } else {
+      val incConfig = config.inc
+      writer.write("\n")
+      map.foreach { case (key, value) =>
+        val keySize = estimateSize(key)
+        val valSize = estimateSize(value)
+        if (keySize > config.width || valSize > config.width) {
+          if (keySize > config.width) {
+            writePrettyItem(writer, key, incConfig)
+            if (valSize > config.width) {
+              writePrettyItem(writer, value, incConfig)
+            } else {
+              writeIndent(writer, incConfig.inc)
+              EdnIo.write(writer, value)
+              writer.write("\n")
+            }
+          } else {
+            writeIndent(writer, incConfig)
+            EdnIo.write(writer, key)
+            writer.write("\n")
+            writePrettyItem(writer, value, incConfig.inc)
+          }
+        } else {
+          writeIndent(writer, incConfig)
+          EdnIo.write(writer, key)
+          writer.write(" ")
+          EdnIo.write(writer, value)
+          writer.write("\n")
+        }
+      }
+      writeIndent(writer, config)
+      writer.write("}")
+      writer.write("\n")
+    }
+  }
+
+  private def writeIndent(writer: Writer, config: Config): Unit =
+    writer.write(config.indentString * config.indentLevel)
+
+  // Estimated length of the single line string rendering the edn data.
+  private def estimateSize(edn: Edn): Int = {
+    edn match {
+      case ENil             => 3
+      case EBool(_)         => 5
+      case EString(value)   => value.length() + 2
+      case EChar(_)         => 2
+      case EInt(value)      => value.toString().length
+      case EDecimal(value)  => value.toString().length
+      case ERatio(n, d)     => n.toString().length + d.toString().length
+      case ESymbol(value)   => value.length
+      case EKeyword(value)  => value.length + 1
+      case EList(list)      => list.foldLeft(0)(_ + estimateSize(_)) + 2 + list.size
+      case EVector(vector)  => vector.foldLeft(0)(_ + estimateSize(_)) + 2 + vector.size
+      case EMap(map)        => map.foldLeft(0) { case (n, (k, v)) => n + estimateSize(k) + estimateSize(v) } + 2 + map.size * 2
+      case ESet(set)        => set.foldLeft(0)(_ + estimateSize(_)) + 2 + set.size
+      case ETag(tag, value) => estimateSize(tag) + estimateSize(value) + 2
+    }
   }
 }

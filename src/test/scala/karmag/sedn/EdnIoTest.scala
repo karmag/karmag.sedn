@@ -80,13 +80,71 @@ class EdnIoTest extends FunSuite {
     assert(text === EdnIo.compactString(edn))
   }
 
-  test("pprint") {
-    val input = s"(${1.to(1000).mkString(" ")})"
+  test("pprint - list/vector") {
+    val delims = List("(" -> ")", "[" -> "]")
+
+    // short data
+    delims.foreach { case (start, end) =>
+      val input = s"$start${1.to(5).mkString(" ")}$end"
+      val edn = read(input)
+      val output = EdnIo.prettyString(edn)
+      assert(input === output)
+    }
+
+    // long data
+    delims.foreach { case (start, end) =>
+      val input = s"$start${1.to(1000).mkString(" ")}$end"
+      val edn = read(input)
+      val output = EdnIo.prettyString(edn)
+      assert(output === s"$start\n  ${1.to(1000).mkString("\n  ")}\n$end")
+    }
+  }
+
+  test("pprint - tag") {
+    val input = "#a #b hello"
     val edn = read(input)
     val output = EdnIo.prettyString(edn)
+    assert(input === output)
+  }
 
-    val nl = System.lineSeparator()
+  test("pprint - map") {
+    val items = List(
+      """{:a 1}""",
+     """{
+        |  some-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-key
+        |  some-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-value
+        |}""".stripMargin,
+     """{
+        |  key
+        |    [
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |      abcdefghijklmnopqrstuvxyz
+        |    ]
+        |}""".stripMargin,
+     """{
+        |  [
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |    abcdefghijklmnopqrstuvxyz
+        |  ]
+        |    value
+        |}""".stripMargin
+    )
 
-    assert(output == s"(${1.to(1000).mkString(s"$nl ")})")
+    items.foreach { input =>
+      val edn = read(input)
+      val output = EdnIo.prettyString(edn)
+      assert(input === output)
+    }
   }
 }
