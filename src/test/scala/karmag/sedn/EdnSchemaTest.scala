@@ -345,4 +345,39 @@ class EdnSchemaTest extends FunSpec {
       assert(isFailure(schema.check(TestUtil.read("1"))))
     }
   }
+
+  describe("conditional") {
+    import karmag.sedn.EdnPath._
+    import karmag.sedn.EdnPath.Implicits._
+    import karmag.sedn.EdnConvert.Implicits._
+
+    val schema = conditional {
+      case _: EString => Option(eString)
+      case m: EMap =>
+        path(EKeyword("type")).withData(m).get() match {
+          case EString("int") =>
+            Option(map(
+              req("type".kw) -> is("int"),
+              req("value".kw) -> eInt))
+          case EString("bool") =>
+            Option(map(
+              req("type".kw) -> is("bool"),
+              req("value".kw) -> eBool))
+          case _ => None
+        }
+      case _ => None
+    }
+
+    describe("ok") {
+      assert(schema.check(TestUtil.read(""""text"""")) === Pass)
+      assert(schema.check(TestUtil.read("""{:type "int" :value 10}""")) === Pass)
+      assert(schema.check(TestUtil.read("""{:type "bool" :value true}""")) === Pass)
+    }
+
+    describe("failure") {
+      assert(isFailure(schema.check(TestUtil.read("10"))))
+      assert(isFailure(schema.check(TestUtil.read("""{:type "int" :value true}"""))))
+      assert(isFailure(schema.check(TestUtil.read("""{:type "x" :value true}"""))))
+    }
+  }
 }

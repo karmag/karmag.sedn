@@ -110,6 +110,12 @@ object EdnSchemas {
   /** Inverses the given schema. */
   def not(schema: Schema): Schema = NotSchema(schema)
 
+  /** Schema that passes the value to validate to the given lookup function
+    * and uses the resulting schema to perform the actual validation. This
+    * will give better error reporting than `or` as it can determine which
+    * schema has failed. */
+  def conditional(lookup: Edn => Option[Schema]): Schema = ConditionalSchema(lookup)
+
   class MapSchema(private val kvs: Map[MapKey, Schema],
                   private val more: Option[(Schema, Schema)] = None) extends Schema {
     private val requiredKvs = kvs.collect { case (RequiredKey(k), s) => k -> s }
@@ -441,5 +447,14 @@ object EdnSchemas {
         case ENil => s"Not: ${schema.toString}"
         case _ => ENil
       }
+  }
+
+  private case class ConditionalSchema(lookup: Edn => Option[Schema]) extends Schema {
+    override def check(data: Edn): Edn = {
+      lookup(data) match {
+        case Some(schema) => schema.check(data)
+        case None => s"No schema for value ${EdnIo.compactString(data)}"
+      }
+    }
   }
 }
