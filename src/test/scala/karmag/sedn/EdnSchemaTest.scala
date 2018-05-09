@@ -1,6 +1,7 @@
 package karmag.sedn
 
 import karmag.sedn.Edn._
+import karmag.sedn.EdnSchema.Schema
 import karmag.sedn.EdnSchemas._
 import org.scalatest.FunSpec
 
@@ -112,6 +113,15 @@ class EdnSchemaTest extends FunSpec {
     it("failure") {
       val values = List("\"123456\"", "[]").map(TestUtil.read)
       assert(values.forall(x => isFailure(schema.check(x))))
+    }
+  }
+
+  describe("fail") {
+    val schema = EdnSchemas.fail("Boom!")
+    stuff.foreach { edn =>
+      it(EdnIo.compactString(edn)) {
+        assert(isFailure(schema.check(edn)))
+      }
     }
   }
 

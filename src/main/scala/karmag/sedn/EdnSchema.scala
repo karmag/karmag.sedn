@@ -55,6 +55,9 @@ object EdnSchemas {
   /** Schema that passes if any of the given schemas pass. */
   def or(schema: Schema*): Schema = OrSchema(schema.toList)
 
+  /** Schema that will always fail with the given message. */
+  def fail(message: String): Schema = FailSchema(message)
+
   /** Matches tagged value. */
   def tag(symbol: String, value: Schema): Schema = TagSchema(symbol, value)
 
@@ -340,6 +343,10 @@ object EdnSchemas {
           else
             check(data, xs, if (error == ENil) result else error)
       }
+  }
+
+  private case class FailSchema(message: String) extends Schema {
+    override def check(data: Edn): Edn = message
   }
 
   private case class TagSchema(symbol: String, valueSchema: EdnSchema.Schema) extends Schema {
