@@ -378,13 +378,13 @@ class EdnSchemaTest extends FunSpec {
       case _ => None
     }
 
-    describe("ok") {
+    it("ok") {
       assert(schema.check(TestUtil.read(""""text"""")) === Pass)
       assert(schema.check(TestUtil.read("""{:type "int" :value 10}""")) === Pass)
       assert(schema.check(TestUtil.read("""{:type "bool" :value true}""")) === Pass)
     }
 
-    describe("failure") {
+    it("failure") {
       assert(isFailure(schema.check(TestUtil.read("10"))))
       assert(isFailure(schema.check(TestUtil.read("""{:type "int" :value true}"""))))
       assert(isFailure(schema.check(TestUtil.read("""{:type "x" :value true}"""))))
